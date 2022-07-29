@@ -1,0 +1,59 @@
+#@ load("@ytt:data", "data")
+#! ---------------------------------------------------------------------
+#! Cluster creation basic configuration
+#! ---------------------------------------------------------------------
+
+CLUSTER_NAME: #@ data.values.CLUSTER_NAME
+CLUSTER_PLAN: dev
+NAMESPACE: default
+CNI: antrea
+
+#! ---------------------------------------------------------------------
+#! Node configuration
+#! AWS-only MACHINE_TYPE settings override cloud-agnostic SIZE settings.
+#! ---------------------------------------------------------------------
+
+CONTROL_PLANE_MACHINE_TYPE: t3.2xlarge
+NODE_MACHINE_TYPE: t3.large
+CONTROL_PLANE_MACHINE_COUNT: 1
+WORKER_MACHINE_COUNT: 1
+
+#! ---------------------------------------------------------------------
+#! AWS Configuration
+#! ---------------------------------------------------------------------
+
+AWS_REGION: "eu-west-1"
+AWS_NODE_AZ: "eu-west-1a"
+AWS_VPC_ID: #@ data.values.AWS_VPC_ID
+AWS_PRIVATE_SUBNET_ID: #@ data.values.AWS_PRIVATE_SUBNET_ID
+AWS_PUBLIC_SUBNET_ID: #@ data.values.AWS_PUBLIC_SUBNET_ID
+AWS_SSH_KEY_NAME: spu-keypair
+BASTION_HOST_ENABLED: false
+
+#! ---------------------------------------------------------------------
+#! Machine Health Check configuration
+#! ---------------------------------------------------------------------
+
+ENABLE_MHC:
+ENABLE_MHC_CONTROL_PLANE: true
+ENABLE_MHC_WORKER_NODE: true
+MHC_UNKNOWN_STATUS_TIMEOUT: 5m
+MHC_FALSE_STATUS_TIMEOUT: 12m
+
+#! ---------------------------------------------------------------------
+#! Common configuration
+#! ---------------------------------------------------------------------
+
+
+ENABLE_AUDIT_LOGGING: true
+ENABLE_DEFAULT_STORAGE_CLASS: true
+
+CLUSTER_CIDR: 100.96.0.0/11
+SERVICE_CIDR: 100.64.0.0/13
+
+
+#! ---------------------------------------------------------------------
+#! Autoscaler configuration
+#! ---------------------------------------------------------------------
+
+ENABLE_AUTOSCALER: false
