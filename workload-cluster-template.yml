@@ -3,7 +3,7 @@
 #! Cluster creation basic configuration
 #! ---------------------------------------------------------------------
 
-CLUSTER_NAME: #@ data.values.CLUSTER_NAME
+CLUSTER_NAME: #@ data.values.WORK_CLUSTER_NAME
 CLUSTER_PLAN: dev
 NAMESPACE: default
 CNI: antrea
@@ -22,12 +22,12 @@ WORKER_MACHINE_COUNT: 1
 #! AWS Configuration
 #! ---------------------------------------------------------------------
 
-AWS_REGION: "eu-west-1"
-AWS_NODE_AZ: "eu-west-1a"
+AWS_REGION: #@ data.values.AWS_REGION
+AWS_NODE_AZ: #@ "{}a".format(data.values.AWS_REGION)
 AWS_VPC_ID: #@ data.values.AWS_VPC_ID
 AWS_PRIVATE_SUBNET_ID: #@ data.values.AWS_PRIVATE_SUBNET_ID
 AWS_PUBLIC_SUBNET_ID: #@ data.values.AWS_PUBLIC_SUBNET_ID
-AWS_SSH_KEY_NAME: spu-keypair
+AWS_SSH_KEY_NAME: #@ data.values.AWS_SSH_KEY_NAME
 BASTION_HOST_ENABLED: false
 
 #! ---------------------------------------------------------------------

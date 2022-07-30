@@ -96,7 +96,7 @@ Resources:
       DisableApiTermination: false
       IamInstanceProfile: !Ref GeneralInstanceProfile
       ImageId: !Ref Ec2InstanceAmi
-      InstanceType: t2.medium
+      InstanceType: t3.large
       KeyName: !Ref SSHKeyName
       Monitoring: true
       SubnetId: !Ref SubnetId
@@ -110,11 +110,11 @@ Resources:
           Fn::Sub:
             - |
               #!/bin/bash
-              export HOME=/home/ubuntu
+              export HOME=/root
               export AWS_REGION=${Region}
               export AWS_DEFAULT_REGION=${Region}
               export MGMT_CLUSTER_NAME=${TKGMgmtName}
-              export CLUSTER_NAME=${TKGWorkName}
+              export WORK_CLUSTER_NAME=${TKGWorkName}
               export AWS_SSH_KEY_NAME=${SSHKeyName}
 
               #Install Prereqs
@@ -131,7 +131,7 @@ Resources:
 
               apt-get -y update
               apt-get -y install docker-ce docker-ce-cli containerd.io docker-compose-plugin
-              usermod -aG docker ubuntu
+              #usermod -aG docker ubuntu
               systemctl start docker
 
               #Install AWScli
@@ -139,7 +139,7 @@ Resources:
               apt-get install awscli -y
 
               #Get TKG binaries from S3 and Install
-              aws s3 sync s3://spu-tanzu-binaries/TKG1.4.3 /tmp/TKG1.4.3
+              aws s3 sync s3://${S3DeliveryBucketName}/TKG1.4.3 /tmp/TKG1.4.3
               cd /tmp/TKG1.4.3
               tar -xvf tanzu-cli-bundle-linux-amd64.tar
               cd cli
@@ -154,22 +154,39 @@ Resources:
               bash install.sh
 
               #reset perms to manage tanzu with ubuntu user
-              chown -R ubuntu:ubuntu /tmp/TKG1.4.3/
-              chown -R ubuntu:ubuntu /home/ubuntu
+              #chown -R ubuntu:ubuntu /tmp/TKG1.4.3/
+              #chown -R ubuntu:ubuntu /home/ubuntu
 
               #Configure tanzu cli
-              su ubuntu -c 'tanzu version; groups'
-              su ubuntu -c 'cd /tmp/TKG1.4.3; tanzu plugin install --local cli all'
+              #su ubuntu -c 'tanzu version; groups'
+              #su ubuntu -c 'cd /tmp/TKG1.4.3; tanzu plugin install --local cli all'
+              tanzu version
+              tanzu plugin install --local cli all
+
               #bootstrap permissions of the account
-              su ubuntu -c 'tanzu management-cluster permissions aws set'
+              tanzu management-cluster permissions aws set
+
               #Install mgmgt cluster
               ytt -f mgmt-cluster-template.yml -f schema.yml -v MGMT_CLUSTER_NAME=$MGMT_CLUSTER_NAME -v AWS_REGION=$AWS_REGION -v AWS_SSH_KEY_NAME=$AWS_SSH_KEY_NAME > mgmt-cluster-manifest.yml
-              chown ubuntu:ubuntu mgmt-cluster-manifest.yml
-              su ubuntu -c 'cd /tmp/TKG1.4.3; tanzu management-cluster create --file mgmt-cluster-manifest.yml'
+              #chown ubuntu:ubuntu mgmt-cluster-manifest.yml
+              tanzu management-cluster create --file mgmt-cluster-manifest.yml
+
+              #Get network created during mgmtcluster install
+              export K8SVPC=`aws ec2 describe-vpcs --query "Vpcs[*].VpcId" --filters "Name=tag:sigs.k8s.io/cluster-api-provider-aws/role,Values=common" --out text`
+              export K8SPUBSUBNETS=`aws ec2 describe-subnets --query "Subnets[*].SubnetId" --out text --filters "Name=vpc-id,Values=$K8SVPC" --filters "Name=tag:sigs.k8s.io/cluster-api-provider-aws/role,Values=public"`
+              export K8SPRIVSUBNETS=`aws ec2 describe-subnets --query "Subnets[*].SubnetId" --out text --filters "Name=vpc-id,Values=$K8SVPC" --filters "Name=tag:sigs.k8s.io/cluster-api-provider-aws/role,Values=private"`
+              
+              #generate workload cluster accordingly
+              ytt -f workload-cluster-template.yml -f schema.yml -v WORK_CLUSTER_NAME=$WORK_CLUSTER_NAME -v AWS_PRIVATE_SUBNET_ID=$K8SPRIVSUBNETS -v AWS_PUBLIC_SUBNET_ID=$K8SPUBSUBNETS  -v AWS_VPC_ID=$K8SVPC -v AWS_REGION=$AWS_REGION -v AWS_SSH_KEY_NAME=$AWS_SSH_KEY_NAME > workload-cluster-manifest.yml
+              #chown ubuntu:ubuntu  workload-cluster-manifest.yml
+
+              #Install workload cluster
+              tanzu cluster create --file workload-cluster-manifest.yml
               exit 0
             - Region: !Ref AWS::Region
               SSHKeyName: !Ref SSHKeyName
               TKGMgmtName: !Ref TKGMgmtName
               TKGWorkName: !Ref TKGWorkName
+              S3DeliveryBucketName: !Ref S3DeliveryBucketName
 
 

@@ -2,7 +2,7 @@
 ---
 AWS_REGION: "changeme"
 MGMT_CLUSTER_NAME: "changeme"
-CLUSTER_NAME: "changeme"
+WORK_CLUSTER_NAME: "changeme"
 AWS_VPC_ID: "changeme"
 AWS_PRIVATE_SUBNET_ID: "changeme"
 AWS_PUBLIC_SUBNET_ID:  "changeme"
