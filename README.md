@@ -1,1 +1,2 @@
+![image info](./Docs/Arch.png)
 [<img src="https://docs.cloudbolt.io/resources/Storage/cloudbolt-csmp-latest/screenshots/launch-stack.png" width="200">](https://eu-west-1.console.aws.amazon.com/cloudformation/home?region=eu-west-1#/stacks/quickcreate?templateURL=https://spu-tanzu-binaries.s3.eu-west-1.amazonaws.com/TKG1.4.3/TKG.yml)
