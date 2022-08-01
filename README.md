@@ -10,6 +10,6 @@ The project will automatically:
 1. Deploy a dedicated jumpbox
 2. Download tanzu binaries from my staging bucket
 3. Download Open source tools for configuration
-4. Deploy a new VPC with a Tanzu managemnt Cluster and a Tanzu workload cluster inside it.   
+4. Deploy a new VPC with a Tanzu management Cluster and a Tanzu workload cluster inside it.   
 [<img src="https://docs.cloudbolt.io/resources/Storage/cloudbolt-csmp-latest/screenshots/launch-stack.png" width="200">](https://eu-west-1.console.aws.amazon.com/cloudformation/home?region=eu-west-1#/stacks/quickcreate?templateURL=https://spu-tanzu-binaries.s3.eu-west-1.amazonaws.com/TKG1.4.3/TKG.yml)
 
