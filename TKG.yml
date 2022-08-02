@@ -4,6 +4,18 @@
 
 Parameters:
 
+  CreateIAMPrereqs:
+    Description: Whether I should create IAM resources. IAM service is global so overlaping with other regions can occur
+    Default: true
+    Type: String
+    AllowedValues: [true, false]
+  
+  CreateWorkloadCLuster:
+    Description: Whether I should create a first workload cluster 
+    Default: false
+    Type: String
+    AllowedValues: [true, false]
+
   SSHKeyName:
     Description: Name of the ssh key used to access ec2 hosts. Set this up ahead of time.
     Type: AWS::EC2::KeyPair::KeyName
@@ -116,6 +128,8 @@ Resources:
               export MGMT_CLUSTER_NAME=${TKGMgmtName}
               export WORK_CLUSTER_NAME=${TKGWorkName}
               export AWS_SSH_KEY_NAME=${SSHKeyName}
+              export CREATE_IAM_PREREQS=${CreateIAMPrereqs}
+              export CREATE_WORKLOAD_CLUSTER=${CreateWorkloadCLuster}
 
               #Install Prereqs
               apt-get -y update
@@ -163,14 +177,19 @@ Resources:
               tanzu version
               tanzu plugin install --local cli all
 
+              if [ "$CREATE_IAM_PREREQS" = "true" ]
+              then
               #bootstrap permissions of the account
               tanzu management-cluster permissions aws set
+              fi
 
               #Install mgmgt cluster
               ytt -f mgmt-cluster-template.yml -f schema.yml -v MGMT_CLUSTER_NAME=$MGMT_CLUSTER_NAME -v AWS_REGION=$AWS_REGION -v AWS_SSH_KEY_NAME=$AWS_SSH_KEY_NAME > mgmt-cluster-manifest.yml
               #chown ubuntu:ubuntu mgmt-cluster-manifest.yml
               tanzu management-cluster create --file mgmt-cluster-manifest.yml
-
+              
+              if [ "$CREATE_WORKLOAD_CLUSTER" = "true" ]
+              then
               #Get network created during mgmtcluster install
               export K8SVPC=`aws ec2 describe-vpcs --query "Vpcs[*].VpcId" --filters "Name=tag:sigs.k8s.io/cluster-api-provider-aws/role,Values=common" --out text`
               export K8SPUBSUBNETS=`aws ec2 describe-subnets --query "Subnets[*].SubnetId" --out text --filters "Name=vpc-id,Values=$K8SVPC" --filters "Name=tag:sigs.k8s.io/cluster-api-provider-aws/role,Values=public"`
@@ -182,11 +201,14 @@ Resources:
 
               #Install workload cluster
               tanzu cluster create --file workload-cluster-manifest.yml
+              fi
               exit 0
             - Region: !Ref AWS::Region
               SSHKeyName: !Ref SSHKeyName
               TKGMgmtName: !Ref TKGMgmtName
               TKGWorkName: !Ref TKGWorkName
               S3DeliveryBucketName: !Ref S3DeliveryBucketName
+              CreateIAMPrereqs: !Ref CreateIAMPrereqs
+              CreateWorkloadCLuster: !Ref CreateWorkloadCLuster
 
 
