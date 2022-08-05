@@ -1,17 +1,63 @@
 ---
 # This template will setup the required resources to bootstrap a TKGm managemnt cluster and a first workload cluster in an AWS account
 #
+Metadata: 
+  AWS::CloudFormation::Interface: 
+    ParameterGroups: 
+      - 
+        Label: 
+          default: "EC2 and connectivity options"
+        Parameters: 
+          - Ec2InstanceAmi
+          - SSHKeyName
+          - SSHCidrBlock
+          - VpcId
+          - SubnetId
+      - 
+        Label: 
+          default: "TKG Deployment configuration options"
+        Parameters: 
+          - CreateIAMPrereqs
+          - S3DeliveryBucketName
+          - TKGMgmtName
+          - CreateWorkloadCLuster
+          - TKGWorkName
+      - 
+        Label: 
+          default: "TMC configuration options, the workload cluster will be enrolled with his hostname"
+        Parameters:
+          - TMCEnrollWorkloadCLuster 
+          - TmcClusterGroup
+          - TmcApiToken
+      - 
+        Label: 
+          default: "Gitops configuration option, the workload cluster will be enrolled with his hostname"
+        Parameters:
+          - GitopsEnrollWorkloadCLuster
+          - GitopsSecret
 
 Parameters:
 
   CreateIAMPrereqs:
-    Description: Whether I should create IAM resources. IAM service is global so overlaping with other regions can occur
+    Description: Whether I should create IAM resources. IAM service is global so overlaping with previous deployments, even in other regions, can occur
     Default: true
     Type: String
     AllowedValues: [true, false]
   
   CreateWorkloadCLuster:
-    Description: Whether I should create a first workload cluster 
+    Description: Whether I should create a first workload cluster.
+    Default: false
+    Type: String
+    AllowedValues: [true, false]
+  
+  TMCEnrollWorkloadCLuster:
+    Description: Whether I should enroll the workload cluster to TMC.
+    Default: false
+    Type: String
+    AllowedValues: [true, false]
+  
+  GitopsEnrollWorkloadCLuster:
+    Description: Whether I should enroll the workload cluster to a fluxcd fleet management repo.
     Default: false
     Type: String
     AllowedValues: [true, false]
@@ -34,6 +80,21 @@ Parameters:
   TKGWorkName:
     Default: "spu-tkg-work-01"
     Description: the name of the workload cluster to deploy
+    Type: String
+  
+  TmcClusterGroup:
+    Default: "spu-demo"
+    Description: the name of the target cluster group in TMC (must exist)
+    Type: String
+  
+  TmcApiToken:
+    Default: "TMC_API_TOKEN"
+    Description: the name of the secret inside secret manager containing your TMC API TOKEN
+    Type: String
+  
+  GitopsSecret:
+    Default: "fluxcd_token"
+    Description: the name of the secret inside secret manager containing your git username,repo and token
     Type: String
 
   S3DeliveryBucketName:
@@ -130,6 +191,10 @@ Resources:
               export AWS_SSH_KEY_NAME=${SSHKeyName}
               export CREATE_IAM_PREREQS=${CreateIAMPrereqs}
               export CREATE_WORKLOAD_CLUSTER=${CreateWorkloadCLuster}
+              export TMC_CLUSTER_GROUP=${TmcClusterGroup}
+              export ENROLL_TMC=${TMCEnrollWorkloadCLuster}
+              export ENROLL_GITOPS=${GitopsEnrollWorkloadCLuster}
+              
 
               #Install Prereqs
               apt-get -y update
@@ -151,6 +216,8 @@ Resources:
               #Install AWScli
               apt-get -y update
               apt-get install awscli -y
+              apt-get install jq -y
+              curl -s https://fluxcd.io/install.sh | sudo bash
 
               #Get TKG binaries from S3 and Install
               aws s3 sync s3://${S3DeliveryBucketName}/TKG1.4.3 /tmp/TKG1.4.3
@@ -162,6 +229,7 @@ Resources:
               gunzip kubectl-linux-v1.21.8+vmware.1.gz
               mv kubectl-linux-v1.21.8+vmware.1 kubectl
               install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+              install tmc /usr/local/bin/tmc
 
               #Instal Carvel
               wget -O- https://carvel.dev/install.sh > install.sh
@@ -190,17 +258,35 @@ Resources:
               
               if [ "$CREATE_WORKLOAD_CLUSTER" = "true" ]
               then
-              #Get network created during mgmtcluster install
-              export K8SVPC=`aws ec2 describe-vpcs --query "Vpcs[*].VpcId" --filters "Name=tag:sigs.k8s.io/cluster-api-provider-aws/role,Values=common" --out text`
-              export K8SPUBSUBNETS=`aws ec2 describe-subnets --query "Subnets[*].SubnetId" --out text --filters "Name=vpc-id,Values=$K8SVPC" --filters "Name=tag:sigs.k8s.io/cluster-api-provider-aws/role,Values=public"`
-              export K8SPRIVSUBNETS=`aws ec2 describe-subnets --query "Subnets[*].SubnetId" --out text --filters "Name=vpc-id,Values=$K8SVPC" --filters "Name=tag:sigs.k8s.io/cluster-api-provider-aws/role,Values=private"`
-              
               #generate workload cluster accordingly
-              ytt -f workload-cluster-template.yml -f schema.yml -v WORK_CLUSTER_NAME=$WORK_CLUSTER_NAME -v AWS_PRIVATE_SUBNET_ID=$K8SPRIVSUBNETS -v AWS_PUBLIC_SUBNET_ID=$K8SPUBSUBNETS  -v AWS_VPC_ID=$K8SVPC -v AWS_REGION=$AWS_REGION -v AWS_SSH_KEY_NAME=$AWS_SSH_KEY_NAME > workload-cluster-manifest.yml
+              ytt -f workload-cluster-template.yml -f schema.yml -v WORK_CLUSTER_NAME=$WORK_CLUSTER_NAME -v AWS_REGION=$AWS_REGION -v AWS_SSH_KEY_NAME=$AWS_SSH_KEY_NAME > workload-cluster-manifest.yml
               #chown ubuntu:ubuntu  workload-cluster-manifest.yml
 
               #Install workload cluster
               tanzu cluster create --file workload-cluster-manifest.yml
+
+              #retrieve and use kubeconfig
+              tanzu cluster kubeconfig get $WORK_CLUSTER_NAME --admin
+              kubectl config use-context $WORK_CLUSTER_NAME-admin@$WORK_CLUSTER_NAME
+
+              if [ "$ENROLL_TMC" = "true" ]
+              then
+              #login to TMC
+              export TMC_API_TOKEN=`aws secretsmanager get-secret-value --secret-id ${TmcApiToken} --query SecretString --output text`
+              tmc login -n $TMC_CLUSTER_GROUP -c
+
+              #attach the cluster (name must be unique across your org)
+              tmc cluster attach -g $TMC_CLUSTER_GROUP -n $WORK_CLUSTER_NAME -k /root/.kube/config
+              fi
+
+              if [ "$ENROLL_GITOPS" = "true" ]
+              then
+              export GITHUB_TOKEN=`aws secretsmanager get-secret-value --secret-id ${GitopsSecret} | jq --raw-output '.SecretString' | jq -r .GITHUB_TOKEN`
+              export GITHUB_USER=`aws secretsmanager get-secret-value --secret-id ${GitopsSecret} | jq --raw-output '.SecretString' | jq -r .GITHUB_USER`
+              export GITHUB_REPO=`aws secretsmanager get-secret-value --secret-id ${GitopsSecret} | jq --raw-output '.SecretString' | jq -r .GITHUB_REPO`
+              flux bootstrap github --owner=$GITHUB_USER --repository=$GITHUB_REPO --branch=main --path=./clusters/$WORK_CLUSTER_NAME --personal
+              fi
+              
               fi
               exit 0
             - Region: !Ref AWS::Region
@@ -210,5 +296,11 @@ Resources:
               S3DeliveryBucketName: !Ref S3DeliveryBucketName
               CreateIAMPrereqs: !Ref CreateIAMPrereqs
               CreateWorkloadCLuster: !Ref CreateWorkloadCLuster
+              TmcClusterGroup: !Ref TmcClusterGroup
+              TmcApiToken: !Ref TmcApiToken
+              GitopsSecret: !Ref GitopsSecret
+              TMCEnrollWorkloadCLuster: !Ref TMCEnrollWorkloadCLuster
+              GitopsEnrollWorkloadCLuster: !Ref GitopsEnrollWorkloadCLuster
+
 
 
