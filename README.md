@@ -1,10 +1,10 @@
 ## This projects deploy Tanzu cluster in your AWS Account
 ![image info](./Docs/Arch.png)
 ## Prerequisites
-Prior to testing the deployment please have a look to the configuration elements you need to prepare
+Prior to testing the deployment please have a look to the configuration elements you need to prepare.  
 | Name          | Description | Type           | Default  |
-| ------------- |:-------------:| -----:|
-| Ec2InstanceAmi| The AMI to use when creating the EC2 instance. Here we use the parameter store to get the latest version of ubuntu jammy | `AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>`          | `/aws/service/canonical/ubuntu/server/jammy/stable/current/amd64/hvm/ebs-gp2/ami-id` |
+| ------------- |:-------------:| -----:|-----:|
+| Ec2InstanceAmi| The AMI to use when creating the EC2 instance. | `AWS::EC2::Image::Id`          | the parameter store value for latest ubuntu jammy |
 | SubnetId | Subnet used to launch bootstrap instance. Form will be populated with subnets available in the AWS region | `AWS::EC2::Subnet::Id` | N/A
 | VPCId | VPC used to launch bootstrap instance. Form will be populated with VPC available in the AWS region | `AWS::EC2::VPC::Id` | N/A
 | S3DeliveryBucketName | Name of the existing S3 bucket used to deliver Tanzu binaries. Leave default, this bucket has been made public to allow you to download templates and artifacts | `string` | spu-tanzu-binaries|
@@ -15,10 +15,10 @@ Prior to testing the deployment please have a look to the configuration elements
 | CreateWorkloadCLuster | Whether I should create a first workload cluster |`bool`| false
 | TKGWorkName | the name of the workload cluster to deploy | `string` | spu-tkg-work-01
 | TMCEnrollCLusters | Whether I should enroll created clusters to TMC |`bool`| false
-| TmcApiToken | the name of the secret inside secret manager containing your TMC API TOKEN stored in secretstring format | `string` | TMC_API_TOKEN
+| TmcApiToken | the name of the secret inside secret manager containing your TMC API TOKEN stored in the [Plaintext format](https://docs.aws.amazon.com/secretsmanager/latest/userguide/create_secret.html)| `string` | TMC_API_TOKEN
 | TmcClusterGroup | the name of the target cluster group in TMC (must exist) | `string` | spu-demo
 | GitopsEnrollWorkloadCLuster | Whether I should enroll the workload cluster to a fluxcd fleet management repo |`bool`| false
-| GitopsSecret | the name of the secret inside secret manager containing your git username,repo and token stored in JSON formatt| `string` | fluxcd_token
+| GitopsSecret | the name of the secret inside secret manager containing your git username,repo and token stored in  [JSON format](https://docs.aws.amazon.com/secretsmanager/latest/userguide/create_secret.html) with the JSON dict GITHUB_USER, GITHUB_TOKEN, GITHUB_REPO. It will be used to [bootstrap your cluster](https://fluxcd.io/docs/cmd/flux_bootstrap_github/) via CLI | `string` | fluxcd_token
 
 ## Deployment steps
 
