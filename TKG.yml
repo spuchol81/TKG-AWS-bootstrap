@@ -163,6 +163,10 @@ Resources:
           Description: "SSH flow to Bootstrap Server"
 
   # The EC2 instance that will send/receive data to/from your satellite using AWS Ground Station.
+  K8sConfigBucket:
+    Type: AWS::S3::Bucket
+    Description: Creating Amazon S3 bucket to download kubeconfig files
+
   BootstrapInstance:
     Type: AWS::EC2::Instance
     Properties:
@@ -298,6 +302,7 @@ Resources:
               fi
               
               fi
+              aws s3 cp /root/.kube/config s3://${K8sConfigBucket}/
               exit 0
             - Region: !Ref AWS::Region
               SSHKeyName: !Ref SSHKeyName
@@ -311,6 +316,10 @@ Resources:
               GitopsSecret: !Ref GitopsSecret
               TMCEnrollCLusters: !Ref TMCEnrollCLusters
               GitopsEnrollWorkloadCLuster: !Ref GitopsEnrollWorkloadCLuster
-
+              K8sConfigBucket: !Ref K8sConfigBucket
+Outputs:
+  K8sConfigBucket:
+    Description: Bucket Hosting the kubeconfigs of the created clusters
+    Value: !Ref K8sConfigBucket
 
 
