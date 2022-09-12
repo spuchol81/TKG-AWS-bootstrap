@@ -24,9 +24,9 @@ Metadata:
           - TKGWorkName
       - 
         Label: 
-          default: "TMC configuration options, the workload cluster will be enrolled with his hostname"
+          default: "TMC configuration options, clusters will be enrolled with their hostname"
         Parameters:
-          - TMCEnrollWorkloadCLuster 
+          - TMCEnrollCLusters 
           - TmcClusterGroup
           - TmcApiToken
       - 
@@ -50,8 +50,8 @@ Parameters:
     Type: String
     AllowedValues: [true, false]
   
-  TMCEnrollWorkloadCLuster:
-    Description: Whether I should enroll the workload cluster to TMC.
+  TMCEnrollCLusters:
+    Description: Whether I should enroll created clusters to TMC.
     Default: false
     Type: String
     AllowedValues: [true, false]
@@ -163,6 +163,10 @@ Resources:
           Description: "SSH flow to Bootstrap Server"
 
   # The EC2 instance that will send/receive data to/from your satellite using AWS Ground Station.
+  K8sConfigBucket:
+    Type: AWS::S3::Bucket
+    Description: Creating Amazon S3 bucket to download kubeconfig files
+
   BootstrapInstance:
     Type: AWS::EC2::Instance
     Properties:
@@ -192,7 +196,7 @@ Resources:
               export CREATE_IAM_PREREQS=${CreateIAMPrereqs}
               export CREATE_WORKLOAD_CLUSTER=${CreateWorkloadCLuster}
               export TMC_CLUSTER_GROUP=${TmcClusterGroup}
-              export ENROLL_TMC=${TMCEnrollWorkloadCLuster}
+              export ENROLL_TMC=${TMCEnrollCLusters}
               export ENROLL_GITOPS=${GitopsEnrollWorkloadCLuster}
               
 
@@ -220,14 +224,14 @@ Resources:
               curl -s https://fluxcd.io/install.sh | sudo bash
 
               #Get TKG binaries from S3 and Install
-              aws s3 sync s3://${S3DeliveryBucketName}/TKG1.4.3 /tmp/TKG1.4.3
-              cd /tmp/TKG1.4.3
-              tar -xvf tanzu-cli-bundle-linux-amd64.tar
+              aws s3 sync s3://${S3DeliveryBucketName}/TKG1.5.4 /tmp/TKG1.5.4
+              cd /tmp/TKG1.5.4
+              tar zxvf tanzu-cli-bundle-linux-amd64.tar.gz
               cd cli
-              install core/v1.4.3/tanzu-core-linux_amd64 /usr/local/bin/tanzu
+              install core/v0.11.6/tanzu-core-linux_amd64 /usr/local/bin/tanzu
               cd ..
-              gunzip kubectl-linux-v1.21.8+vmware.1.gz
-              mv kubectl-linux-v1.21.8+vmware.1 kubectl
+              gunzip kubectl-linux-v1.22.9+vmware.1.gz
+              mv kubectl-linux-v1.22.9+vmware.1 kubectl
               install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
               install tmc /usr/local/bin/tmc
 
@@ -236,14 +240,14 @@ Resources:
               bash install.sh
 
               #reset perms to manage tanzu with ubuntu user
-              #chown -R ubuntu:ubuntu /tmp/TKG1.4.3/
+              #chown -R ubuntu:ubuntu /tmp/TKG1.5.4/
               #chown -R ubuntu:ubuntu /home/ubuntu
 
               #Configure tanzu cli
               #su ubuntu -c 'tanzu version; groups'
-              #su ubuntu -c 'cd /tmp/TKG1.4.3; tanzu plugin install --local cli all'
+              #su ubuntu -c 'cd /tmp/TKG1.5.4; tanzu plugin install --local cli all'
               tanzu version
-              tanzu plugin install --local cli all
+              tanzu plugin install all
 
               if [ "$CREATE_IAM_PREREQS" = "true" ]
               then
@@ -255,6 +259,16 @@ Resources:
               ytt -f mgmt-cluster-template.yml -f schema.yml -v MGMT_CLUSTER_NAME=$MGMT_CLUSTER_NAME -v AWS_REGION=$AWS_REGION -v AWS_SSH_KEY_NAME=$AWS_SSH_KEY_NAME > mgmt-cluster-manifest.yml
               #chown ubuntu:ubuntu mgmt-cluster-manifest.yml
               tanzu management-cluster create --file mgmt-cluster-manifest.yml
+
+              if [ "$ENROLL_TMC" = "true" ]
+              then
+              #login to TMC
+              export TMC_API_TOKEN=`aws secretsmanager get-secret-value --secret-id ${TmcApiToken} --query SecretString --output text`
+              tmc login -n $TMC_CLUSTER_GROUP -c
+
+              #attach the cluster (name must be unique across your org)
+              tmc managementcluster register $MGMT_CLUSTER_NAME -c $TMC_CLUSTER_GROUP -p TKG -k /root/.kube/config
+              fi
               
               if [ "$CREATE_WORKLOAD_CLUSTER" = "true" ]
               then
@@ -288,6 +302,7 @@ Resources:
               fi
               
               fi
+              aws s3 cp /root/.kube/config s3://${K8sConfigBucket}/
               exit 0
             - Region: !Ref AWS::Region
               SSHKeyName: !Ref SSHKeyName
@@ -299,8 +314,12 @@ Resources:
               TmcClusterGroup: !Ref TmcClusterGroup
               TmcApiToken: !Ref TmcApiToken
               GitopsSecret: !Ref GitopsSecret
-              TMCEnrollWorkloadCLuster: !Ref TMCEnrollWorkloadCLuster
+              TMCEnrollCLusters: !Ref TMCEnrollCLusters
               GitopsEnrollWorkloadCLuster: !Ref GitopsEnrollWorkloadCLuster
-
+              K8sConfigBucket: !Ref K8sConfigBucket
+Outputs:
+  K8sConfigBucket:
+    Description: Bucket Hosting the kubeconfigs of the created clusters
+    Value: !Ref K8sConfigBucket
 
 
