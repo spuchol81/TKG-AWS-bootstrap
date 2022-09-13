@@ -22,6 +22,8 @@ Metadata:
           - TKGMgmtName
           - CreateWorkloadCLuster
           - TKGWorkName
+          - WorkerType
+          - WorkerCount
       - 
         Label: 
           default: "TMC configuration options, clusters will be enrolled with their hostname"
@@ -37,6 +39,19 @@ Metadata:
           - GitopsSecret
 
 Parameters:
+  WorkerType:
+    Type: String
+    Default: m5.large
+    AllowedValues:
+      - m5.large
+      - m5.xlarge
+      - m5.2xlarge
+    Description: Workers instance type for your workload clusters. Default is m5.large.
+  
+  WorkerCount:
+    Type: Number
+    Default: 1
+    Description: Number of workers for your workload clusters
 
   CreateIAMPrereqs:
     Description: Whether I should create IAM resources. IAM service is global so overlaping with previous deployments, even in other regions, can occur
@@ -273,7 +288,7 @@ Resources:
               if [ "$CREATE_WORKLOAD_CLUSTER" = "true" ]
               then
               #generate workload cluster accordingly
-              ytt -f workload-cluster-template.yml -f schema.yml -v WORK_CLUSTER_NAME=$WORK_CLUSTER_NAME -v AWS_REGION=$AWS_REGION -v AWS_SSH_KEY_NAME=$AWS_SSH_KEY_NAME > workload-cluster-manifest.yml
+              ytt -f workload-cluster-template.yml -f schema.yml -v WORK_CLUSTER_NAME=$WORK_CLUSTER_NAME -v AWS_REGION=$AWS_REGION -v AWS_SSH_KEY_NAME=$AWS_SSH_KEY_NAME -v WORKER_COUNT=${WorkerCount} -v WORKER_TYPE=${WorkerType} > workload-cluster-manifest.yml
               #chown ubuntu:ubuntu  workload-cluster-manifest.yml
 
               #Install workload cluster
@@ -317,6 +332,8 @@ Resources:
               TMCEnrollCLusters: !Ref TMCEnrollCLusters
               GitopsEnrollWorkloadCLuster: !Ref GitopsEnrollWorkloadCLuster
               K8sConfigBucket: !Ref K8sConfigBucket
+              WorkerType: !Ref WorkerType
+              WorkerCount: !Ref WorkerCount
 Outputs:
   K8sConfigBucket:
     Description: Bucket Hosting the kubeconfigs of the created clusters
