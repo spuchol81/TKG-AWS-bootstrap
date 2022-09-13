@@ -14,6 +14,8 @@ Prior to testing the deployment please have a look to the configuration elements
 | TKGMgmtName | the name of the management cluster to deploy | `string` | spu-tkg-mgmt
 | CreateWorkloadCLuster | Whether I should create a first workload cluster |`bool`| false
 | TKGWorkName | the name of the workload cluster to deploy | `string` | spu-tkg-work-01
+| WorkerType | Workers instance type for your workload clusters. | `string` | m5.large
+| WorkerCount | Workers instance count for your workload clusters. | `Number` | 1
 | TMCEnrollCLusters | Whether I should enroll created clusters to TMC |`bool`| false
 | TmcApiToken | the name of the secret inside secret manager containing your TMC API TOKEN stored in the [Plaintext format](https://docs.aws.amazon.com/secretsmanager/latest/userguide/create_secret.html)| `string` | TMC_API_TOKEN
 | TmcClusterGroup | the name of the target cluster group in TMC (must exist) | `string` | spu-demo
